@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KG스틸 메일 아카이브 뷰어 [로컬전용]</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --gnb-h:52px;--sub-h:38px;--lnb-w:210px;--tb-h:46px;
+  --kg-purple:#7b2d8b;--kg-pink:#c94099;--kg-grad:linear-gradient(90deg,#7b2d8b,#c94099,#e05a30);
+  --accent:#8b3a9b;--accent-light:#f5eaf8;--accent-hover:#6e2478;
+  --border:#e4e4e4;--border2:#d0d0d0;
+  --bg:#f2f3f5;--white:#fff;
+  --text:#222;--dim:#555;--muted:#999;
+  --unread:#7b2d8b;--row-hover:#faf5fc;--row-active:#ede0f3;
+}
+body{font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);background:var(--bg);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+
+/* ── GNB ── */
+.gnb{height:var(--gnb-h);background:var(--white);display:flex;align-items:center;padding:0 20px;flex-shrink:0;border-bottom:1px solid var(--border);gap:0;position:relative;}
+.gnb-logo{display:flex;align-items:center;gap:8px;margin-right:24px;}
+.kg-logo-box{width:36px;height:36px;background:var(--kg-grad);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;letter-spacing:-1px;}
+.gnb-brand{font-size:15px;font-weight:700;color:#222;line-height:1.1;}
+.gnb-brand span{display:block;font-size:10px;font-weight:400;color:var(--muted);}
+.gnb-notice{position:absolute;left:50%;transform:translateX(-50%);background:#fff8e1;border:1px solid #ffe082;color:#b8860b;font-size:11px;padding:3px 14px;border-radius:12px;white-space:nowrap;pointer-events:none;}
+.gnb-r{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.gnb-user{display:flex;align-items:center;gap:8px;}
+.gnb-avatar{width:32px;height:32px;border-radius:50%;background:var(--kg-grad);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;}
+.gnb-uname{font-size:12px;color:var(--dim);}
+.gnb-stat{font-size:11px;color:var(--muted);}
+
+/* ── SUB NAV (메일만) ── */
+.subnav{height:var(--sub-h);background:var(--kg-grad);display:flex;align-items:center;padding:0 20px;flex-shrink:0;gap:0;}
+.subnav-item{font-size:13px;font-weight:500;color:rgba(255,255,255,.85);padding:0 16px;height:100%;display:flex;align-items:center;cursor:default;border-bottom:2px solid transparent;transition:all .15s;}
+.subnav-item.cur{color:#fff;font-weight:700;border-bottom-color:#fff;}
+
+/* ── LAYOUT ── */
+.layout{display:flex;flex:1;overflow:hidden;}
+
+/* ── LNB ── */
+.lnb{width:var(--lnb-w);background:var(--white);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+.lnb-head{padding:12px 14px 6px;display:flex;align-items:center;justify-content:space-between;}
+.lnb-head-title{font-size:13px;font-weight:700;color:var(--text);}
+.btn-write{display:flex;align-items:center;justify-content:center;gap:6px;margin:0 12px 8px;padding:9px 0;background:var(--accent);color:#fff;border:none;border-radius:5px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;width:calc(100% - 24px);transition:background .15s;}
+.btn-write:hover{background:var(--accent-hover);}
+.lnb-menu{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+.lnb-section{margin-bottom:4px;}
+.lnb-section-title{font-size:10px;font-weight:700;color:var(--muted);padding:6px 14px 2px;text-transform:uppercase;letter-spacing:.06em;}
+.lnb-item{display:flex;align-items:center;padding:6px 12px 6px 14px;font-size:12px;color:var(--dim);cursor:pointer;border-left:3px solid transparent;transition:background .1s;gap:7px;min-height:30px;}
+.lnb-item:hover{background:var(--row-hover);}
+.lnb-item.active{background:var(--accent-light);border-left-color:var(--accent);color:var(--accent);font-weight:600;}
+.lnb-item .ico{font-size:13px;flex-shrink:0;}
+.lnb-badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;min-width:18px;text-align:center;flex-shrink:0;}
+.lnb-badge.gray{background:#bbb;}
+/* 하위 폴더 */
+.lnb-subfolder{padding-left:32px;font-size:11px;color:var(--muted);}
+.lnb-subfolder:hover{background:var(--row-hover);}
+.lnb-subfolder.active{background:var(--accent-light);border-left-color:var(--accent);color:var(--accent);font-weight:600;}
+.lnb-folder-toggle{cursor:pointer;font-size:11px;color:var(--muted);margin-left:auto;padding:0 2px;flex-shrink:0;}
+.lnb-divider{height:1px;background:var(--border);margin:4px 0;}
+/* 폴더 추가 버튼 */
+.lnb-add-folder{display:flex;align-items:center;gap:5px;padding:5px 14px;font-size:11px;color:var(--accent);cursor:pointer;opacity:.8;}
+.lnb-add-folder:hover{opacity:1;}
+
+.lnb-cap{padding:8px 14px 12px;border-top:1px solid var(--border);}
+.lnb-cap-row{font-size:11px;color:var(--muted);margin-bottom:5px;display:flex;justify-content:space-between;}
+.cap-bg{background:var(--border);border-radius:4px;height:5px;overflow:hidden;}
+.cap-fill{height:100%;background:var(--kg-grad);border-radius:4px;transition:width .5s;}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.toolbar{height:var(--tb-h);background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:5px;flex-shrink:0;}
+.tb-title{font-size:14px;font-weight:700;margin-right:8px;white-space:nowrap;}
+.tb-sep{width:1px;height:20px;background:var(--border);margin:0 3px;}
+.tbtn{display:flex;align-items:center;gap:3px;padding:5px 10px;border:1px solid var(--border2);border-radius:3px;background:var(--white);color:var(--dim);font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap;transition:background .1s;}
+.tbtn:hover{background:var(--row-hover);border-color:var(--accent);color:var(--accent);}
+.tbtn.pri{background:var(--accent);color:#fff;border-color:var(--accent);}
+.tbtn.pri:hover{background:var(--accent-hover);}
+.sort-sel{border:1px solid var(--border2);border-radius:3px;padding:5px 8px;font-family:inherit;font-size:12px;color:var(--dim);background:var(--white);outline:none;cursor:pointer;}
+.search-box{margin-left:auto;display:flex;align-items:center;border:1px solid var(--border2);border-radius:3px;overflow:hidden;background:var(--white);}
+.search-box input{border:none;outline:none;padding:6px 10px;font-family:inherit;font-size:12px;color:var(--text);width:200px;}
+.search-box button{border:none;background:var(--accent);color:#fff;padding:0 12px;height:34px;cursor:pointer;font-size:12px;font-family:inherit;}
+
+/* ── CONTENT ── */
+.content{flex:1;display:flex;overflow:hidden;}
+
+/* ── LIST PANEL ── */
+.list-panel{width:390px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--white);overflow:hidden;}
+.list-hdr{display:flex;align-items:center;padding:5px 12px;background:#f9f9fb;border-bottom:1px solid var(--border);flex-shrink:0;gap:6px;min-height:34px;}
+.list-hdr label{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;}
+.list-hdr-r{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);}
+#mailList{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+#mailList::-webkit-scrollbar{width:4px;}
+#mailList::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+
+/* 날짜 구분선 */
+.date-divider{padding:6px 14px 3px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;background:#fafafa;border-bottom:1px solid var(--border);letter-spacing:.05em;}
+
+.mrow{display:flex;flex-direction:column;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;position:relative;background:var(--white);}
+.mrow:hover{background:var(--row-hover);}
+.mrow.active{background:var(--row-active);}
+.mrow.unread{background:#fdf8ff;}
+.mrow.unread .mrow-subj{font-weight:700;color:var(--text);}
+.mrow.unread .mrow-from{font-weight:700;color:var(--unread);}
+.mrow-top{display:flex;align-items:center;gap:5px;margin-bottom:3px;}
+.mrow-from{font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mrow-date{font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0;}
+.mrow-subj{font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;}
+.mrow-prev{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.udot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+.att-ico{font-size:11px;color:var(--muted);}
+
+/* 컨텍스트 메뉴 */
+.ctx-menu{position:fixed;background:var(--white);border:1px solid var(--border2);border-radius:5px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:9999;min-width:160px;padding:4px 0;display:none;}
+.ctx-menu.show{display:block;}
+.ctx-item{padding:7px 14px;font-size:12px;color:var(--dim);cursor:pointer;transition:background .1s;}
+.ctx-item:hover{background:var(--row-hover);color:var(--accent);}
+.ctx-item.danger{color:#e53935;}
+.ctx-item.danger:hover{background:#ffeaea;}
+.ctx-sep{height:1px;background:var(--border);margin:3px 0;}
+.ctx-submenu-wrap{position:relative;}
+.ctx-submenu{position:absolute;left:100%;top:-4px;background:var(--white);border:1px solid var(--border2);border-radius:5px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:140px;padding:4px 0;display:none;z-index:10000;}
+.ctx-submenu-wrap:hover .ctx-submenu{display:block;}
+
+/* ── PAGING ── */
+.paging{display:flex;align-items:center;justify-content:center;gap:3px;padding:7px 0;border-top:1px solid var(--border);background:var(--white);flex-shrink:0;}
+.pgbtn{border:1px solid var(--border2);border-radius:3px;background:var(--white);color:var(--dim);font-size:12px;padding:3px 8px;cursor:pointer;font-family:inherit;}
+.pgbtn:hover{background:var(--row-hover);}
+.pgbtn.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+.pgbtn:disabled{opacity:.4;cursor:default;}
+
+/* ── DETAIL ── */
+.det-panel{flex:1;display:flex;flex-direction:column;background:var(--white);overflow:hidden;}
+
+/* 상단 제목+액션 바만 고정 (최소 높이) */
+.det-topbar{padding:10px 16px 9px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:flex-start;gap:10px;background:var(--white);}
+.det-subj{font-size:14px;font-weight:700;color:var(--text);flex:1;line-height:1.4;word-break:break-all;}
+.det-actions{display:flex;gap:5px;flex-shrink:0;align-items:center;}
+
+/* 나머지(메타+첨부+본문)는 모두 하나의 스크롤 컨테이너 안으로 */
+.det-scroll{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;background:var(--bg);}
+.det-scroll::-webkit-scrollbar{width:5px;}
+.det-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+
+.det-meta-box{background:var(--white);border-bottom:1px solid var(--border);padding:8px 16px 10px;}
+.det-meta{display:grid;grid-template-columns:54px 1fr;gap:3px 8px;font-size:12px;}
+.dm-l{color:var(--muted);font-weight:500;text-align:right;white-space:nowrap;padding-top:1px;}
+.dm-v{color:var(--dim);word-break:break-all;}
+
+/* 첨부 영역 — 한 줄 고정, 넘치면 가로 스크롤 */
+.att-row{background:var(--white);border-bottom:1px solid var(--border);padding:6px 16px;display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;scrollbar-width:thin;scrollbar-color:var(--border) transparent;flex-shrink:0;}
+.att-row::-webkit-scrollbar{height:3px;}
+.att-row::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+.att-label{font-size:11px;color:var(--muted);flex-shrink:0;}
+.att-chip{display:inline-flex;align-items:center;gap:4px;background:#f5f5f5;border:1px solid var(--border2);border-radius:3px;padding:3px 9px;font-size:11px;color:var(--dim);cursor:pointer;transition:background .1s,border-color .1s;flex-shrink:0;white-space:nowrap;}
+.att-chip:hover{background:var(--accent-light);border-color:var(--accent);color:var(--accent);}
+.att-chip .att-sz{color:var(--muted);font-size:10px;}
+
+/* 이미지 토글 행 */
+.img-toggle-row{background:var(--white);border-bottom:1px solid var(--border);padding:5px 16px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
+.img-toggle-row:hover{background:var(--row-hover);}
+.img-toggle-label{font-size:11px;color:var(--accent);font-weight:500;flex:1;}
+.img-toggle-arrow{font-size:10px;color:var(--muted);transition:transform .2s;}
+.img-toggle-arrow.open{transform:rotate(180deg);}
+.img-grid{background:var(--white);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px;}
+.img-thumb{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;border:1px solid var(--border2);border-radius:4px;overflow:hidden;width:90px;background:var(--white);transition:border-color .15s;}
+.img-thumb:hover{border-color:var(--accent);}
+.img-thumb img{width:90px;height:60px;object-fit:cover;display:block;}
+.img-thumb span{font-size:9px;color:var(--dim);padding:2px 4px;width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;}
+
+/* 본문 */
+.det-body-inner{padding:16px;background:var(--bg);}
+.body-wrap{background:var(--white);border:1px solid var(--border);border-radius:4px;overflow:hidden;}
+.body-wrap iframe{width:100%;min-height:200px;border:none;display:block;}
+.body-plain{background:var(--white);border:1px solid var(--border);border-radius:4px;padding:16px 20px;font-size:13px;color:var(--text);line-height:1.8;white-space:pre-wrap;word-break:break-word;}
+.inline-imgs{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
+.inline-img-wrap{background:var(--white);border:1px solid var(--border);border-radius:4px;overflow:hidden;}
+.inline-img-wrap img{max-width:100%;display:block;}
+.inline-img-name{font-size:11px;color:var(--muted);padding:4px 10px;border-top:1px solid var(--border);background:#fafbfc;}
+.no-sel{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--muted);background:var(--bg);}
+.empty-list{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px 20px;color:var(--muted);}
+.dzone{border:2px dashed var(--border2);border-radius:6px;padding:28px 32px;text-align:center;cursor:pointer;transition:all .2s;width:100%;max-width:280px;}
+.dzone:hover,.dzone.over{border-color:var(--accent);background:var(--accent-light);}
+.dzone p{font-size:12px;color:var(--dim);margin-top:8px;line-height:1.6;}
+
+/* ── MODAL (폴더 추가/이름변경) ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:8888;display:none;align-items:center;justify-content:center;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--white);border-radius:8px;padding:24px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.18);}
+.modal h3{font-size:14px;font-weight:700;margin-bottom:14px;}
+.modal input{width:100%;border:1px solid var(--border2);border-radius:4px;padding:8px 10px;font-family:inherit;font-size:13px;outline:none;margin-bottom:14px;}
+.modal input:focus{border-color:var(--accent);}
+.modal-btns{display:flex;justify-content:flex-end;gap:8px;}
+.mbtn{border:1px solid var(--border2);border-radius:4px;padding:7px 16px;font-family:inherit;font-size:12px;cursor:pointer;background:var(--white);color:var(--dim);}
+.mbtn:hover{background:var(--row-hover);}
+.mbtn.pri{background:var(--accent);color:#fff;border-color:var(--accent);}
+.mbtn.pri:hover{background:var(--accent-hover);}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;right:24px;background:#323232;color:#fff;font-size:12px;padding:10px 18px;border-radius:4px;z-index:9999;opacity:0;transform:translateY(6px);transition:all .25s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.progress{position:fixed;top:0;left:0;height:2px;background:var(--kg-grad);z-index:9999;transition:width .3s;pointer-events:none;}
+mark{background:#fff59d;color:var(--text);border-radius:2px;padding:0 1px;}
+#fileInput{display:none;}
+
+/* ── DRAG & DROP ── */
+.mrow{cursor:grab;}
+.mrow:active{cursor:grabbing;}
+.mrow.dragging{opacity:.35;background:var(--accent-light) !important;}
+.lnb-item.drop-over,.lnb-subfolder.drop-over{
+  background:var(--accent-light) !important;
+  border-left-color:var(--accent) !important;
+  outline:2px dashed var(--accent);
+  outline-offset:-2px;
+  transition:none;
+}
+#dragGhost{
+  position:fixed;top:-999px;left:-999px;z-index:99999;
+  background:var(--accent);color:#fff;
+  font-size:11px;font-weight:600;padding:5px 14px;
+  border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.28);
+  pointer-events:none;white-space:nowrap;
+}
+</style>
+</head>
+<body>
+
+<div class="progress" id="pb" style="width:0;opacity:0"></div>
+<div class="toast" id="toast"></div>
+<div id="dragGhost"></div>
+<input type="file" id="fileInput" multiple accept=".eml">
+
+<!-- 컨텍스트 메뉴 -->
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-item" onclick="ctxAction('reply')">↩ 회신</div>
+  <div class="ctx-item ctx-submenu-wrap">
+    📁 이동
+    <div class="ctx-submenu" id="ctxMoveMenu"></div>
+  </div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxAction('markRead')">✉ 읽은 상태로 표시</div>
+  <div class="ctx-item" onclick="ctxAction('markUnread')">📬 안읽음 표시</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" onclick="ctxAction('delete')">🗑 삭제</div>
+</div>
+
+<!-- 폴더 모달 -->
+<div class="modal-bg" id="folderModal">
+  <div class="modal">
+    <h3 id="modalTitle">새 폴더 만들기</h3>
+    <input type="text" id="folderInput" placeholder="폴더 이름을 입력하세요">
+    <div class="modal-btns">
+      <button class="mbtn" onclick="closeModal()">취소</button>
+      <button class="mbtn pri" onclick="confirmModal()">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- GNB -->
+<div class="gnb">
+  <div class="gnb-logo">
+    <div class="kg-logo-box">KG</div>
+    <div class="gnb-brand">KG스틸 그룹웨어<span>메일 아카이브 뷰어</span></div>
+  </div>
+  <span class="gnb-notice">⚠ 로컬 전용 — 실제 그룹웨어가 아닙니다</span>
+  <div class="gnb-r">
+    <span class="gnb-stat" id="statTxt">로드된 메일 없음</span>
+    <div class="gnb-user">
+      <div class="gnb-avatar">나</div>
+      <span class="gnb-uname">로컬 사용자</span>
+    </div>
+  </div>
+</div>
+
+<!-- SUB NAV -->
+<div class="subnav">
+  <div class="subnav-item cur">메일</div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- LNB -->
+  <div class="lnb">
+    <div class="lnb-head">
+      <span class="lnb-head-title">메일</span>
+    </div>
+    <button class="btn-write" onclick="document.getElementById('fileInput').click()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      EML 불러오기
+    </button>
+    <div class="lnb-menu" id="lnbMenu">
+      <!-- 동적 렌더링 -->
+    </div>
+    <div class="lnb-cap">
+      <div class="lnb-cap-row"><span>아카이브 용량</span><span id="capTxt">0 KB</span></div>
+      <div class="cap-bg"><div class="cap-fill" id="capBar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="toolbar">
+      <span class="tb-title" id="tbTitle">받은 메일함</span>
+      <div class="tb-sep"></div>
+      <button class="tbtn" onclick="markSelectedRead()">읽음 표시</button>
+      <button class="tbtn" onclick="deleteSelected()">🗑 삭제</button>
+      <div class="tb-sep"></div>
+      <select class="sort-sel" id="sortSel" onchange="applyFilter()">
+        <option value="date-desc">날짜 최신순</option>
+        <option value="date-asc">날짜 오래된순</option>
+        <option value="from">발신자순</option>
+        <option value="subject">제목순</option>
+        <option value="size">크기순</option>
+      </select>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="제목, 발신자, 내용 검색" oninput="onSearch(this.value)">
+        <button onclick="applyFilter()">검색</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="list-panel">
+        <div class="list-hdr">
+          <label><input type="checkbox" id="chkAll" onchange="toggleAll(this)"> 전체</label>
+          <div class="list-hdr-r">
+            <span id="cntInfo">0건</span>
+          </div>
+        </div>
+        <div id="mailList">
+          <div class="empty-list">
+            <div class="dzone" id="dzone">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="1.3"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              <p>.eml 파일을 여기에 드래그하거나<br>위 버튼을 눌러 불러오세요</p>
+            </div>
+          </div>
+        </div>
+        <div class="paging" id="paging" style="display:none"></div>
+      </div>
+
+      <div class="det-panel" id="detPanel">
+        <div class="no-sel">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          <span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ── 초기 상태 ── */
+let mails=[], filtered=[], activeIdx=null, searchQ='', curPage=1, ctxMailIdx=null;
+const PS=50;
+
+// 폴더 구조
+let folders = [
+  {id:'inbox',  label:'받은 메일함', icon:'📥', system:true,  expanded:true,  children:[]},
+  {id:'sent',   label:'보낸 메일함', icon:'📤', system:true,  expanded:false, children:[]},
+  {id:'unread', label:'안읽음',      icon:'📬', system:true,  expanded:false, children:[]},
+  {id:'attach', label:'첨부파일 있음',icon:'📎',system:true,  expanded:false, children:[]},
+  {id:'trash',  label:'삭제된 메일', icon:'🗑', system:true,  expanded:false, children:[]},
+];
+let curFolderId = 'inbox';
+let modalMode = null; // 'add-root','add-sub','rename'
+let modalTargetId = null;
+let selectedRows = new Set();
+
+/* ── UTILS ── */
+const esc=s=>s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):'';
+const hi=(t,q)=>{if(!q||!t)return esc(t);const e=esc(t),eq=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');return e.replace(new RegExp(eq,'gi'),m=>`<mark>${m}</mark>`);};
+const fmtShort=d=>{if(!d||isNaN(d))return'';const n=new Date();if(n-d<86400000&&n.getDate()===d.getDate())return d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});if(n-d<604800000)return['일','월','화','수','목','금','토'][d.getDay()]+'요일';return d.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'});};
+const fmtFull=d=>(!d||isNaN(d))?'날짜 없음':d.toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+const fmtSz=b=>{if(!b)return'0B';if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB';};
+const dispName=addr=>{if(!addr)return'알 수 없음';const m=addr.match(/^"?([^"<\n]+?)"?\s*(?:<[^>]*>)?$/);return m?m[1].trim():addr.replace(/<[^>]*>/g,'').trim()||addr;};
+const stripTags=h=>h?h.replace(/<[^>]+>/g,' ').replace(/&[a-z]+;/gi,' ').replace(/\s+/g,' ').trim():'';
+const genId=()=>Math.random().toString(36).slice(2)+Date.now();
+
+function mimeToExt(mime){const m={'image/jpeg':'jpg','image/png':'png','image/gif':'gif','image/webp':'webp','application/pdf':'pdf','application/msword':'doc','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx','application/vnd.ms-excel':'xls','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'xlsx','application/zip':'zip','text/plain':'txt'};return m[mime.toLowerCase().split(';')[0].trim()]||'dat';}
+function fileIcon(n){const e=(n.split('.').pop()||'').toLowerCase();if(['jpg','jpeg','png','gif','bmp','webp'].includes(e))return'🖼️';if(e==='pdf')return'📄';if(['doc','docx'].includes(e))return'📝';if(['xls','xlsx','csv'].includes(e))return'📊';if(['ppt','pptx'].includes(e))return'📊';if(['zip','rar','7z'].includes(e))return'🗜️';return'📎';}
+
+/* ── LNB 렌더링 ── */
+function renderLNB(){
+  const menu=document.getElementById('lnbMenu');
+  const unreadN=mails.filter(m=>m.unread&&m.folderId!=='trash').length;
+  const counts={};
+  for(const m of mails){
+    if(!counts[m.folderId]) counts[m.folderId]=0;
+    counts[m.folderId]++;
+  }
+
+  function renderFolder(f, depth=0){
+    const isActive=curFolderId===f.id;
+    const cnt=counts[f.id]||0;
+    const unreadCnt=f.id==='unread'?unreadN:(mails.filter(m=>m.folderId===f.id&&m.unread).length);
+    const badgeN=f.id==='unread'?unreadN:unreadCnt;
+    let html='';
+    const cls=depth===0?'lnb-item':'lnb-item lnb-subfolder';
+    html+=`<div class="${cls} ${isActive?'active':''}" data-fid="${f.id}"
+      onclick="setFolder('${f.id}')"
+      oncontextmenu="folderCtx(event,'${f.id}')"
+      ondragover="onFolderDragOver(event,'${f.id}')"
+      ondragleave="onFolderDragLeave(event)"
+      ondrop="onFolderDrop(event,'${f.id}')">
+      <span class="ico">${f.icon||'📁'}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.label)}</span>
+      ${badgeN>0?`<span class="lnb-badge">${badgeN}</span>`:(cnt>0?`<span class="lnb-badge gray">${cnt}</span>`:'')}
+      ${!f.system&&f.children&&f.children.length>0?`<span class="lnb-folder-toggle" onclick="event.stopPropagation();toggleFolderExpand('${f.id}')">${f.expanded?'▾':'▸'}</span>`:''}
+    </div>`;
+    if(f.children&&f.children.length>0&&(f.expanded||depth>0)){
+      for(const c of f.children) html+=renderFolder(c,depth+1);
+    }
+    return html;
+  }
+
+  // 시스템 폴더 섹션
+  let html=`<div class="lnb-section">`;
+  for(const f of folders.filter(f=>f.system)) html+=renderFolder(f);
+  html+=`</div>`;
+
+  // 내 폴더 섹션
+  const custom=folders.filter(f=>!f.system);
+  html+=`<div class="lnb-divider"></div><div class="lnb-section">
+    <div class="lnb-section-title">내 폴더</div>`;
+  for(const f of custom) html+=renderFolder(f);
+  html+=`<div class="lnb-add-folder" onclick="openAddFolder(null)">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> 새 폴더 추가
+  </div></div>`;
+
+  menu.innerHTML=html;
+}
+
+/* ── 폴더 컨텍스트 ── */
+let folderCtxEl=null;
+function folderCtx(e, fid){
+  const f=findFolder(fid);
+  if(!f||f.system) return;
+  e.preventDefault(); e.stopPropagation();
+  const menu=document.createElement('div');
+  menu.className='ctx-menu show';
+  menu.style.left=e.clientX+'px'; menu.style.top=e.clientY+'px';
+  menu.innerHTML=`
+    <div class="ctx-item" onclick="openAddSubFolder('${fid}')">📁 하위 폴더 추가</div>
+    <div class="ctx-item" onclick="openRenameFolder('${fid}')">✏️ 이름 변경</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item danger" onclick="deleteFolder('${fid}')">🗑 폴더 삭제</div>`;
+  document.body.appendChild(menu);
+  folderCtxEl=menu;
+  setTimeout(()=>document.addEventListener('click',removeFolderCtx,{once:true}),0);
+}
+function removeFolderCtx(){if(folderCtxEl){folderCtxEl.remove();folderCtxEl=null;}}
+
+function toggleFolderExpand(fid){
+  const f=findFolder(fid);
+  if(f) f.expanded=!f.expanded;
+  renderLNB();
+}
+
+function findFolder(id, list=folders){
+  for(const f of list){
+    if(f.id===id) return f;
+    if(f.children){const found=findFolder(id,f.children);if(found)return found;}
+  }
+  return null;
+}
+
+function getAllFolderIds(list=folders){
+  let ids=[];
+  for(const f of list){ids.push(f.id);if(f.children)ids=[...ids,...getAllFolderIds(f.children)];}
+  return ids;
+}
+
+function getAllCustomFolders(list=folders){
+  let res=[];
+  for(const f of list){
+    if(!f.system){res.push(f);if(f.children)res=[...res,...getAllCustomFolders(f.children)];}
+  }
+  return res;
+}
+
+/* ── 폴더 CRUD ── */
+function openAddFolder(parentId){
+  modalMode='add-root'; modalTargetId=parentId;
+  document.getElementById('modalTitle').textContent='새 폴더 만들기';
+  document.getElementById('folderInput').value='';
+  document.getElementById('folderModal').classList.add('show');
+  document.getElementById('folderInput').focus();
+}
+function openAddSubFolder(parentId){
+  modalMode='add-sub'; modalTargetId=parentId;
+  document.getElementById('modalTitle').textContent='하위 폴더 만들기';
+  document.getElementById('folderInput').value='';
+  document.getElementById('folderModal').classList.add('show');
+  document.getElementById('folderInput').focus();
+}
+function openRenameFolder(fid){
+  modalMode='rename'; modalTargetId=fid;
+  const f=findFolder(fid);
+  document.getElementById('modalTitle').textContent='폴더 이름 변경';
+  document.getElementById('folderInput').value=f?f.label:'';
+  document.getElementById('folderModal').classList.add('show');
+  document.getElementById('folderInput').focus();
+}
+function closeModal(){document.getElementById('folderModal').classList.remove('show');}
+function confirmModal(){
+  const val=document.getElementById('folderInput').value.trim();
+  if(!val){toast('폴더 이름을 입력하세요');return;}
+  if(modalMode==='add-root'||modalMode==='add-sub'){
+    const newF={id:'f_'+genId(),label:val,icon:'📁',system:false,expanded:true,children:[]};
+    if(modalMode==='add-sub'&&modalTargetId){
+      const parent=findFolder(modalTargetId);
+      if(parent){parent.children=parent.children||[];parent.children.push(newF);}
+    } else {
+      folders.push(newF);
+    }
+    toast(`폴더 '${val}' 생성됨`);
+  } else if(modalMode==='rename'){
+    const f=findFolder(modalTargetId);
+    if(f){f.label=val;toast(`이름 변경됨: ${val}`);}
+  }
+  closeModal();
+  renderLNB();
+  buildMoveMenu();
+}
+function deleteFolder(fid){
+  // 해당 폴더의 메일을 inbox로 이동
+  const allIds=getAllFolderIds([findFolder(fid)].filter(Boolean));
+  mails.forEach(m=>{if(allIds.includes(m.folderId))m.folderId='inbox';});
+  // folders에서 제거
+  function removeFrom(list,id){
+    const i=list.findIndex(f=>f.id===id);
+    if(i>=0){list.splice(i,1);return true;}
+    for(const f of list){if(f.children&&removeFrom(f.children,id))return true;}
+    return false;
+  }
+  removeFrom(folders,fid);
+  if(curFolderId===fid) setFolder('inbox');
+  else {renderLNB();buildMoveMenu();}
+  toast('폴더 삭제됨');
+}
+
+document.getElementById('folderInput').addEventListener('keydown',e=>{if(e.key==='Enter')confirmModal();if(e.key==='Escape')closeModal();});
+
+/* ── 이동 메뉴 빌드 ── */
+function buildMoveMenu(){
+  const menu=document.getElementById('ctxMoveMenu');
+  const custom=getAllCustomFolders();
+  const systemTargets=[
+    {id:'inbox',label:'📥 받은 메일함'},
+    {id:'sent',label:'📤 보낸 메일함'},
+    {id:'trash',label:'🗑 삭제함'},
+  ];
+  let html=systemTargets.map(f=>`<div class="ctx-item" onclick="moveMail(${null},'${f.id}')">${esc(f.label)}</div>`).join('');
+  if(custom.length){
+    html+=`<div class="ctx-sep"></div>`;
+    html+=custom.map(f=>`<div class="ctx-item" onclick="moveMail(null,'${f.id}')">📁 ${esc(f.label)}</div>`).join('');
+  }
+  menu.innerHTML=html;
+}
+
+function moveMail(idx, targetFolderId){
+  const i=(idx!==null&&idx!==undefined)?idx:ctxMailIdx;
+  const m=filtered[i];
+  if(!m){hideCtxMenu();return;}
+  m.folderId=targetFolderId;
+  const f=findFolder(targetFolderId);
+  toast(`'${m.subject.slice(0,20)}' → ${f?f.label:targetFolderId}`);
+  hideCtxMenu();
+  // 현재 폴더에서 사라져야 하면 필터 재적용
+  applyFilter();
+  if(activeIdx===i){activeIdx=null;document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;}
+  renderLNB();
+}
+
+/* ── 폴더 이동 ── */
+function setFolder(fid){
+  curFolderId=fid;
+  const f=findFolder(fid)||{label:fid};
+  document.getElementById('tbTitle').textContent=f.label;
+  curPage=1; activeIdx=null; selectedRows.clear();
+  document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;
+  renderLNB();
+  applyFilter();
+}
+
+/* ── FILTER & SORT ── */
+function applyFilter(){
+  const q=document.getElementById('searchInput').value.trim();
+  searchQ=q.toLowerCase();
+  const sort=document.getElementById('sortSel').value;
+  curPage=1;
+  let base=[...mails];
+
+  // 폴더 필터
+  if(curFolderId==='unread') base=base.filter(m=>m.unread&&m.folderId!=='trash');
+  else if(curFolderId==='attach') base=base.filter(m=>m.attachments.length>0&&m.folderId!=='trash');
+  else base=base.filter(m=>m.folderId===curFolderId);
+
+  if(searchQ) base=base.filter(m=>
+    m.subject.toLowerCase().includes(searchQ)||
+    m.from.toLowerCase().includes(searchQ)||
+    m.to.toLowerCase().includes(searchQ)||
+    m.plainPart.toLowerCase().includes(searchQ)||
+    stripTags(m.htmlPart).toLowerCase().includes(searchQ)
+  );
+  base.sort((a,b)=>{
+    if(sort==='date-desc')return b.date-a.date;
+    if(sort==='date-asc')return a.date-b.date;
+    if(sort==='from')return dispName(a.from).localeCompare(dispName(b.from),'ko');
+    if(sort==='subject')return a.subject.localeCompare(b.subject,'ko');
+    if(sort==='size')return b.size-a.size;
+    return 0;
+  });
+  filtered=base;
+  renderList();
+  updateSidebar();
+}
+
+function onSearch(v){searchQ=v.toLowerCase();curPage=1;applyFilter();}
+
+/* ── LIST RENDER ── */
+function renderList(){
+  const list=document.getElementById('mailList');
+  document.getElementById('cntInfo').textContent=filtered.length+'건';
+  if(filtered.length===0){
+    list.innerHTML=`<div class="empty-list"><p style="color:var(--muted);font-size:13px;">${mails.length===0?'EML 파일을 불러오세요':'검색 결과가 없습니다'}</p></div>`;
+    document.getElementById('paging').style.display='none';
+    return;
+  }
+  const total=Math.ceil(filtered.length/PS);
+  const start=(curPage-1)*PS;
+  const items=filtered.slice(start,start+PS);
+
+  // 날짜 구분선용
+  let lastDateLabel='';
+  const getDateLabel=d=>{
+    if(!d||isNaN(d))return'날짜 없음';
+    const n=new Date(),diff=n-d;
+    if(diff<86400000&&n.getDate()===d.getDate())return'오늘';
+    if(diff<172800000)return'어제';
+    return d.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric'});
+  };
+
+  let html='';
+  items.forEach((m,i)=>{
+    const idx=start+i;
+    const dl=getDateLabel(m.date);
+    if(dl!==lastDateLabel){html+=`<div class="date-divider">${esc(dl)}</div>`;lastDateLabel=dl;}
+    const sel=selectedRows.has(idx);
+    html+=`<div class="mrow ${m.unread?'unread':''} ${activeIdx===idx?'active':''} ${sel?'selected':''}"
+      draggable="true"
+      onclick="selectMail(${idx},event)"
+      oncontextmenu="showCtxMenu(event,${idx})"
+      ondragstart="onMailDragStart(event,${idx})"
+      ondragend="onMailDragEnd(event)"
+      data-idx="${idx}">
+      <div class="mrow-top">
+        <input type="checkbox" style="margin-right:4px;flex-shrink:0" ${sel?'checked':''} onclick="event.stopPropagation();toggleRowSel(${idx},this)">
+        ${m.unread?'<span class="udot"></span>':''}
+        <span class="mrow-from">${hi(dispName(m.from),searchQ)}</span>
+        ${m.attachments.length?'<span class="att-ico">📎</span>':''}
+        <span class="mrow-date">${fmtShort(m.date)}</span>
+      </div>
+      <div class="mrow-subj">${hi(m.subject,searchQ)}</div>
+      <div class="mrow-prev">${esc(m.preview)}</div>
+    </div>`;
+  });
+  list.innerHTML=html;
+
+  const pg=document.getElementById('paging');
+  if(total<=1){pg.style.display='none';return;}
+  pg.style.display='flex';
+  let btns=`<button class="pgbtn" onclick="gotoPage(${curPage-1})" ${curPage===1?'disabled':''}>&#8249;</button>`;
+  for(let p=Math.max(1,curPage-2);p<=Math.min(total,curPage+2);p++)
+    btns+=`<button class="pgbtn ${p===curPage?'on':''}" onclick="gotoPage(${p})">${p}</button>`;
+  btns+=`<button class="pgbtn" onclick="gotoPage(${curPage+1})" ${curPage===total?'disabled':''}>&#8250;</button>`;
+  pg.innerHTML=btns;
+}
+
+function gotoPage(p){const t=Math.ceil(filtered.length/PS);if(p<1||p>t)return;curPage=p;renderList();}
+
+function toggleAll(cb){
+  const items=filtered.slice((curPage-1)*PS,curPage*PS);
+  items.forEach((_,i)=>{const idx=(curPage-1)*PS+i;cb.checked?selectedRows.add(idx):selectedRows.delete(idx);});
+  renderList();
+}
+function toggleRowSel(idx,cb){cb.checked?selectedRows.add(idx):selectedRows.delete(idx);renderList();}
+
+function markSelectedRead(){
+  (selectedRows.size>0?[...selectedRows]:[activeIdx]).filter(i=>i!=null).forEach(i=>{if(filtered[i])filtered[i].unread=false;});
+  selectedRows.clear();
+  renderList();updateSidebar();renderLNB();
+}
+function deleteSelected(){
+  const idxs=selectedRows.size>0?[...selectedRows]:[activeIdx].filter(i=>i!=null);
+  idxs.forEach(i=>{if(filtered[i])filtered[i].folderId='trash';});
+  selectedRows.clear();
+  if(idxs.includes(activeIdx)){activeIdx=null;document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;}
+  applyFilter();renderLNB();toast(`${idxs.length}개 메일 삭제됨`);
+}
+
+/* ── 컨텍스트 메뉴 ── */
+function showCtxMenu(e,idx){
+  e.preventDefault();
+  ctxMailIdx=idx;
+  const menu=document.getElementById('ctxMenu');
+  menu.classList.add('show');
+  const x=Math.min(e.clientX,window.innerWidth-180), y=Math.min(e.clientY,window.innerHeight-200);
+  menu.style.left=x+'px'; menu.style.top=y+'px';
+  buildMoveMenu();
+  // 이동 submenu 안에 현재 인덱스 바인딩
+  document.getElementById('ctxMoveMenu').querySelectorAll('.ctx-item').forEach(el=>{
+    el.onclick=()=>{const m=el.getAttribute('onclick');if(m){const fid=m.match(/'([^']+)'\)$/)?.[1];if(fid)moveMail(ctxMailIdx,fid);}};
+  });
+  setTimeout(()=>document.addEventListener('click',hideCtxMenu,{once:true}),0);
+}
+function hideCtxMenu(){document.getElementById('ctxMenu').classList.remove('show');}
+function ctxAction(type){
+  const m=filtered[ctxMailIdx];
+  if(!m){hideCtxMenu();return;}
+  if(type==='markRead'){m.unread=false;}
+  else if(type==='markUnread'){m.unread=true;}
+  else if(type==='delete'){m.folderId='trash';if(activeIdx===ctxMailIdx){activeIdx=null;document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;}}
+  hideCtxMenu();applyFilter();renderLNB();
+}
+
+/* ── SELECT & DETAIL ── */
+function selectMail(idx,e){
+  if(e&&e.target.type==='checkbox')return;
+  activeIdx=idx;
+  const m=filtered[idx];
+  if(!m)return;
+  m.unread=false;
+  renderList();
+  renderDetail(m,idx);
+  updateSidebar();renderLNB();
+}
+
+function renderDetail(m,mIdx){
+  const q=searchQ;
+  const imgAtts=m.attachments.filter(a=>a.isImage);
+  const fileAtts=m.attachments.filter(a=>!a.isImage);
+
+  // 이동 드롭다운
+  const allFolderOpts=[
+    {id:'inbox',label:'📥 받은 메일함'},{id:'sent',label:'📤 보낸 메일함'},
+    ...getAllCustomFolders().map(f=>({id:f.id,label:'📁 '+f.label}))
+  ].filter(f=>f.id!==m.folderId);
+  const moveOpts=allFolderOpts.map(f=>`<option value="${f.id}">${esc(f.label)}</option>`).join('');
+
+  // 파일 첨부 — 한 줄 가로 스크롤
+  const fileRow=fileAtts.length?`<div class="att-row">
+    <span class="att-label">📎 ${fileAtts.length}개</span>
+    ${fileAtts.map(a=>{const ri=m.attachments.indexOf(a);return`<div class="att-chip" onclick="downloadAtt(${mIdx},${ri})" title="${esc(a.name)} — 클릭하여 다운로드">
+      ${fileIcon(a.name)} ${esc(a.name)} <span class="att-sz">${fmtSz(a.size)}</span>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </div>`;}).join('')}
+  </div>`:'';
+
+  // 이미지 — 접기/펼치기 토글 (기본 펼침)
+  const imgToggle=imgAtts.length?`
+    <div class="img-toggle-row" onclick="toggleImgGrid(this)">
+      <span class="img-toggle-label">🖼️ 이미지 ${imgAtts.length}개 (클릭하여 접기/펼치기)</span>
+      <span class="img-toggle-arrow open">▲</span>
+    </div>
+    <div class="img-grid" id="imgGrid_${mIdx}">
+      ${imgAtts.map(a=>{const ri=m.attachments.indexOf(a);return`<div class="img-thumb" onclick="downloadAtt(${mIdx},${ri})" title="${esc(a.name)} — 클릭하여 다운로드">
+        <img src="${a.dataUrl}" alt="${esc(a.name)}" onerror="this.parentElement.style.display='none'">
+        <span>${esc(a.name)}</span>
+      </div>`;}).join('')}
+    </div>`:'';
+
+  // 본문
+  let bodyHtml;
+  if(m.htmlPart){
+    const sd=m.htmlPart.replace(/"/g,'&quot;');
+    bodyHtml=`<div class="body-wrap"><iframe srcdoc="${sd}" sandbox="allow-same-origin" style="width:100%;border:none;" onload="resizeIframe(this)"></iframe></div>`;
+  } else if(m.plainPart){
+    const pl=m.plainPart;
+    const hl=q?pl.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),t=>`<mark>${esc(t)}</mark>`):esc(pl);
+    bodyHtml=`<div class="body-plain">${hl}</div>`;
+    // plain text 메일에서 이미지는 본문 아래 inline으로
+    if(imgAtts.length) bodyHtml+=`<div class="inline-imgs" style="margin-top:12px">${imgAtts.map(a=>`
+      <div class="inline-img-wrap">
+        <img src="${a.dataUrl}" alt="${esc(a.name)}" style="max-width:100%;display:block">
+        <div class="inline-img-name">${esc(a.name)}</div>
+      </div>`).join('')}</div>`;
+  } else {
+    bodyHtml=`<div class="body-plain" style="color:var(--muted)">(내용 없음)</div>`;
+  }
+
+  document.getElementById('detPanel').innerHTML=`
+    <!-- 제목+액션: 고정 -->
+    <div class="det-topbar">
+      <div class="det-subj">${hi(m.subject,q)}</div>
+      <div class="det-actions">
+        <select class="sort-sel" style="font-size:11px;padding:4px 7px;" onchange="if(this.value)moveMail(${mIdx},this.value)">
+          <option value="">📁 이동...</option>${moveOpts}
+        </select>
+        <button class="tbtn" onclick="deleteMailDirect(${mIdx})" style="font-size:11px;padding:4px 8px;" title="삭제">🗑</button>
+      </div>
+    </div>
+
+    <!-- 메타+첨부+본문: 하나의 스크롤 컨테이너 -->
+    <div class="det-scroll">
+      <!-- 메타 -->
+      <div class="det-meta-box">
+        <div class="det-meta">
+          <span class="dm-l">보낸사람</span><span class="dm-v">${hi(m.from,q)}</span>
+          <span class="dm-l">받는사람</span><span class="dm-v">${esc(m.to)||'—'}</span>
+          ${m.cc?`<span class="dm-l">참조</span><span class="dm-v">${esc(m.cc)}</span>`:''}
+          <span class="dm-l">날짜</span><span class="dm-v">${fmtFull(m.date)}</span>
+          <span class="dm-l">폴더</span><span class="dm-v">${esc((findFolder(m.folderId)||{label:m.folderId}).label)}</span>
+        </div>
+      </div>
+      <!-- 파일 첨부 한 줄 -->
+      ${fileRow}
+      <!-- 이미지 토글 -->
+      ${imgToggle}
+      <!-- 본문 -->
+      <div class="det-body-inner">${bodyHtml}</div>
+    </div>`;
+}
+
+function toggleImgGrid(row){
+  const arrow=row.querySelector('.img-toggle-arrow');
+  const grid=row.nextElementSibling;
+  const isOpen=arrow.classList.contains('open');
+  if(isOpen){grid.style.display='none';arrow.classList.remove('open');arrow.textContent='▼';}
+  else{grid.style.display='flex';arrow.classList.add('open');arrow.textContent='▲';}
+}
+
+function deleteMailDirect(idx){
+  const m=filtered[idx];
+  if(!m)return;
+  m.folderId='trash';
+  activeIdx=null;
+  document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;
+  applyFilter();renderLNB();toast('메일이 삭제함으로 이동됐습니다');
+}
+
+function resizeIframe(f){try{const h=f.contentDocument?.body?.scrollHeight;if(h)f.style.height=Math.min(h+40,3000)+'px';}catch{}}
+
+/* ── 다운로드 ── */
+function downloadAtt(mailIdx,attIdx){
+  const m=filtered[mailIdx];if(!m)return;
+  const att=m.attachments[attIdx];if(!att||!att.data){toast('다운로드할 데이터가 없습니다');return;}
+  const blob=new Blob([att.data],{type:att.mime||'application/octet-stream'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=att.name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+  toast(`다운로드: ${att.name}`);
+}
+
+/* ── SIDEBAR ── */
+function updateSidebar(){
+  const un=mails.filter(m=>m.unread&&m.folderId!=='trash').length;
+  const tb=mails.reduce((s,m)=>s+m.size,0);
+  document.getElementById('capTxt').textContent=fmtSz(tb);
+  document.getElementById('capBar').style.width=Math.min(tb/(50*1024*1024)*100,100)+'%';
+  document.getElementById('statTxt').textContent=`${mails.length}건 | 안읽음 ${un}건`;
+}
+
+/* ── EML 파서 ── */
+function parseEml(raw,filename){
+  const text=raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const hEnd=text.indexOf('\n\n');
+  const hTxt=hEnd>=0?text.slice(0,hEnd):text;
+  const bTxt=hEnd>=0?text.slice(hEnd+2):'';
+  const headers=parseHeaders(hTxt);
+  const ct=headers['content-type']||'';
+  const boundary=getBoundary(ct);
+  let htmlPart='',plainPart='',attachments=[],cidMap={};
+
+  if(boundary){
+    const parts=splitParts(bTxt,boundary);
+    for(const p of parts){
+      const r=processPart(p);
+      if(r.type==='html'&&!htmlPart) htmlPart=r.data;
+      else if(r.type==='plain'&&!plainPart) plainPart=r.data;
+      else if(r.type==='attachment') attachments.push(r.att);
+      else if(r.type==='inline-image'){if(r.cid)cidMap[r.cid]=r.dataUrl;attachments.push(r.att);}
+      else if(r.type==='multipart'){
+        for(const s of r.subs){
+          if(s.type==='html'&&!htmlPart) htmlPart=s.data;
+          else if(s.type==='plain'&&!plainPart) plainPart=s.data;
+          else if(s.type==='attachment') attachments.push(s.att);
+          else if(s.type==='inline-image'){if(s.cid)cidMap[s.cid]=s.dataUrl;attachments.push(s.att);}
+        }
+      }
+    }
+  } else {
+    const cte=(headers['content-transfer-encoding']||'').trim().toLowerCase();
+    const dec=decodeBody(bTxt,cte,getCharset(ct));
+    if(ct.toLowerCase().includes('text/html')) htmlPart=dec; else plainPart=dec;
+  }
+
+  if(htmlPart&&Object.keys(cidMap).length>0){
+    htmlPart=htmlPart.replace(/src=["']cid:([^"'\s>]+)["']/gi,(_,cid)=>{
+      const key=cid.trim(),url=cidMap[key]||cidMap[key.split('@')[0]];
+      return url?`src="${url}"`:_;
+    });
+  }
+
+  const preview=(plainPart||stripTags(htmlPart)).slice(0,100).replace(/\s+/g,' ').trim();
+  let date=new Date(0);
+  const rawDate=headers['date']||'';
+  if(rawDate){const d=new Date(rawDate);if(!isNaN(d))date=d;}
+
+  // 발신함 판별 (X-Folder, From 등)
+  const xFolder=(headers['x-folder']||'').toLowerCase();
+  const defaultFolder=xFolder.includes('sent')||xFolder.includes('보낸')?'sent':'inbox';
+
+  return{
+    id:genId(),filename,
+    from:decodeRFC2047(headers['from']||'알 수 없음'),
+    to:decodeRFC2047(headers['to']||''),
+    cc:decodeRFC2047(headers['cc']||''),
+    subject:decodeRFC2047(headers['subject']||'(제목 없음)'),
+    date,htmlPart,plainPart,attachments,cidMap,preview,
+    size:raw.length,unread:true,folderId:defaultFolder
+  };
+}
+
+function processPart(part){
+  const i=part.indexOf('\n\n');
+  const ph=i>=0?parseHeaders(part.slice(0,i)):{};
+  const pb=i>=0?part.slice(i+2):'';
+  const ct=ph['content-type']||'';
+  const ctL=ct.toLowerCase();
+  const cte=(ph['content-transfer-encoding']||'').trim().toLowerCase();
+  const cd=(ph['content-disposition']||'').toLowerCase();
+  const nameM=ct.match(/name\*?=(?:"([^"]+)"|([^;\s\n]+))/i);
+  const cdName=(ph['content-disposition']||'').match(/filename\*?=(?:"([^"]+)"|([^;\s\n]+))/i);
+  const rawName=(cdName&&(cdName[1]||cdName[2]))||(nameM&&(nameM[1]||nameM[2]))||null;
+  const attName=rawName?decodeRFC2047(decodeURIComponent(rawName.replace(/^UTF-8''/i,''))):null;
+
+  if(ctL.includes('multipart/')){
+    const b2=getBoundary(ct);
+    if(b2){const subs=splitParts(pb,b2).map(s=>processPart(s));return{type:'multipart',subs};}
+    return{type:'skip'};
+  }
+
+  if(ctL.includes('image/')){
+    try{
+      let rawB64='',buf=null;
+      if(cte==='base64'){rawB64=pb.replace(/\s/g,'');const bin=atob(rawB64);buf=new Uint8Array(bin.length);for(let j=0;j<bin.length;j++)buf[j]=bin.charCodeAt(j);}
+      else{const qp=cte==='quoted-printable'?pb.replace(/=\r?\n/g,'').replace(/=([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16))):pb;buf=new Uint8Array(qp.length);for(let j=0;j<qp.length;j++)buf[j]=qp.charCodeAt(j);rawB64=btoa(String.fromCharCode(...buf));}
+      const mimeM=ctL.match(/^([^;\s]+)/);
+      const mime=mimeM?mimeM[1]:'image/jpeg';
+      const dataUrl=`data:${mime};base64,${rawB64}`;
+      const cidRaw=(ph['content-id']||'').replace(/[<>]/g,'').trim();
+      const name=attName||(cidRaw||('image.'+mimeToExt(mime)));
+      return{type:'inline-image',cid:cidRaw||null,dataUrl,att:{name,mime,data:buf,size:buf.length,dataUrl,isImage:true}};
+    }catch{}
+  }
+
+  const isAtt=cd.includes('attachment')||(attName&&!ctL.includes('text/')&&!ctL.includes('message/'));
+  if(isAtt){
+    let blobData=null,blobMime='application/octet-stream';
+    const mimeM=ctL.match(/^([^;\s]+)/);if(mimeM)blobMime=mimeM[1];
+    if(cte==='base64'){try{const c=pb.replace(/\s/g,'');const bin=atob(c);const buf=new Uint8Array(bin.length);for(let j=0;j<bin.length;j++)buf[j]=bin.charCodeAt(j);blobData=buf;}catch{}}
+    else if(cte==='quoted-printable'){const qp=pb.replace(/=\r?\n/g,'').replace(/=([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));const buf=new Uint8Array(qp.length);for(let j=0;j<qp.length;j++)buf[j]=qp.charCodeAt(j);blobData=buf;}
+    else{const buf=new Uint8Array(pb.length);for(let j=0;j<pb.length;j++)buf[j]=pb.charCodeAt(j);blobData=buf;}
+    const finalName=attName||('attachment.'+mimeToExt(blobMime));
+    return{type:'attachment',att:{name:finalName,mime:blobMime,data:blobData,size:blobData?blobData.length:0}};
+  }
+  if(ctL.includes('text/html')) return{type:'html',data:decodeBody(pb,cte,getCharset(ct))};
+  if(ctL.includes('text/plain')) return{type:'plain',data:decodeBody(pb,cte,getCharset(ct))};
+  return{type:'skip'};
+}
+
+function parseHeaders(txt){const h={};const u=txt.replace(/\n[ \t]+/g,' ');for(const l of u.split('\n')){const m=l.match(/^([a-zA-Z][a-zA-Z0-9\-]*):\s*(.*)/);if(m)h[m[1].toLowerCase()]=m[2];}return h;}
+function getBoundary(ct){const m=ct.match(/boundary=(?:"([^"]+)"|([^\s;]+))/i);return m?(m[1]||m[2]):null;}
+function getCharset(ct){const m=ct.match(/charset=(?:"?([^";\s\n]+)"?)/i);return m?m[1].toLowerCase():'utf-8';}
+function splitParts(body,boundary){const parts=[],bnd='--'+boundary,end=bnd+'--';let cur=null;for(const l of body.split('\n')){const tr=l.trimEnd();if(tr===end||tr.startsWith(end)){if(cur!==null)parts.push(cur);break;}if(tr===bnd||tr.startsWith(bnd+' ')||tr.startsWith(bnd+'\t')){if(cur!==null)parts.push(cur);cur='';}else if(cur!==null)cur+=(cur?'\n':'')+l;}if(cur!==null&&cur.trim())parts.push(cur);return parts;}
+
+function decodeBody(body,enc,charset){
+  if(!body)return'';
+  try{
+    if(enc==='base64'){const c=body.replace(/\s/g,'');if(!c)return'';const bin=atob(c);const b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);try{return new TextDecoder(charset||'utf-8',{fatal:false}).decode(b);}catch{return new TextDecoder('utf-8',{fatal:false}).decode(b);}}
+    if(enc==='quoted-printable'){const qp=body.replace(/=\r?\n/g,'').replace(/=([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));try{const b=new Uint8Array(qp.length);for(let i=0;i<qp.length;i++)b[i]=qp.charCodeAt(i);return new TextDecoder(charset||'utf-8',{fatal:false}).decode(b);}catch{return qp;}}
+    return body;
+  }catch{return body;}
+}
+function decodeRFC2047(str){if(!str)return'';return str.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g,(_,cs,enc,data)=>{try{let b;if(enc.toUpperCase()==='B'){const bin=atob(data.replace(/\s/g,''));b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);}else{const qp=data.replace(/_/g,' ').replace(/=([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));b=new Uint8Array(qp.length);for(let i=0;i<qp.length;i++)b[i]=qp.charCodeAt(i);}return new TextDecoder(cs,{fatal:false}).decode(b);}catch{return data;}});}
+
+/* ── FILE LOAD ── */
+async function loadFiles(files){
+  const bar=document.getElementById('pb');
+  bar.style.opacity='1';bar.style.width='0%';
+  const arr=Array.from(files).filter(f=>f.name.toLowerCase().endsWith('.eml'));
+  if(!arr.length){toast('EML 파일이 없습니다');bar.style.opacity='0';return;}
+  let n=0;
+  for(const f of arr){
+    bar.style.width=((n/arr.length)*90)+'%';
+    try{const txt=await readText(f);const p=parseEml(txt,f.name);if(!mails.find(m=>m.filename===f.name&&m.size===p.size))mails.push(p);}
+    catch(e){console.warn('parse error',f.name,e);}
+    n++;
+  }
+  bar.style.width='100%';
+  setTimeout(()=>{bar.style.opacity='0';bar.style.width='0';},500);
+  applyFilter();renderLNB();
+  toast(`${n}개 메일 로드 완료 (총 ${mails.length}건)`);
+}
+function readText(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(file,'utf-8');});}
+
+/* ── EVENTS ── */
+document.getElementById('fileInput').addEventListener('change',e=>{loadFiles(e.target.files);e.target.value='';});
+document.body.addEventListener('dragover',e=>{e.preventDefault();document.getElementById('dzone')?.classList.add('over');});
+document.body.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.getElementById('dzone')?.classList.remove('over');});
+document.body.addEventListener('drop',e=>{e.preventDefault();document.getElementById('dzone')?.classList.remove('over');if(e.dataTransfer.files.length)loadFiles(e.dataTransfer.files);});
+document.addEventListener('click',()=>{const m=document.getElementById('ctxMenu');if(m.classList.contains('show'))m.classList.remove('show');});
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);}
+
+/* ── DRAG & DROP ── */
+let dragMailIdxs = [];   // 드래그 중인 메일 인덱스 목록 (다중 선택 지원)
+let dragOverFid  = null; // 현재 하이라이트된 폴더 id
+
+function onMailDragStart(e, idx){
+  // 선택된 행이 있으면 선택된 것 전부, 없으면 이 행만
+  dragMailIdxs = selectedRows.size > 0 ? [...selectedRows] : [idx];
+
+  // dataTransfer 설정 (필수)
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(idx));
+
+  // 커스텀 고스트 레이블
+  const ghost = document.getElementById('dragGhost');
+  ghost.textContent = dragMailIdxs.length > 1
+    ? `📧 ${dragMailIdxs.length}개 메일 이동`
+    : `📧 ${filtered[idx]?.subject?.slice(0,22)||'메일'} 이동`;
+  // 화면 밖에 놓고 setDragImage 호출
+  ghost.style.top  = '-999px';
+  ghost.style.left = '-999px';
+  e.dataTransfer.setDragImage(ghost, 0, 0);
+
+  // 드래그 중 시각 효과 — 약간 딜레이 (setDragImage 이후)
+  setTimeout(() => {
+    dragMailIdxs.forEach(i => {
+      const el = document.querySelector(`.mrow[data-idx="${i}"]`);
+      if(el) el.classList.add('dragging');
+    });
+  }, 0);
+}
+
+function onMailDragEnd(e){
+  // 모든 dragging 클래스 제거
+  document.querySelectorAll('.mrow.dragging').forEach(el => el.classList.remove('dragging'));
+  // 폴더 하이라이트 해제
+  clearFolderHighlight();
+  dragMailIdxs = [];
+}
+
+function onFolderDragOver(e, fid){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if(dragOverFid === fid) return;
+  clearFolderHighlight();
+  dragOverFid = fid;
+  const el = document.querySelector(`.lnb-item[data-fid="${fid}"],.lnb-subfolder[data-fid="${fid}"]`);
+  if(el) el.classList.add('drop-over');
+}
+
+function onFolderDragLeave(e){
+  // relatedTarget이 같은 폴더 안이면 무시
+  if(e.currentTarget.contains(e.relatedTarget)) return;
+  clearFolderHighlight();
+}
+
+function onFolderDrop(e, fid){
+  e.preventDefault();
+  clearFolderHighlight();
+
+  // 현재 폴더와 동일하면 무시
+  if(fid === curFolderId && dragMailIdxs.every(i => filtered[i]?.folderId === fid)){
+    toast('이미 해당 폴더에 있습니다');
+    return;
+  }
+
+  const folder = findFolder(fid);
+  const label  = folder ? folder.label : fid;
+  let moved = 0;
+
+  dragMailIdxs.forEach(i => {
+    const m = filtered[i];
+    if(m && m.folderId !== fid){ m.folderId = fid; moved++; }
+  });
+
+  if(moved === 0){ toast('이동할 메일이 없습니다'); return; }
+
+  // 현재 열람 중인 메일이 이동됐으면 상세 닫기
+  if(dragMailIdxs.includes(activeIdx)){
+    activeIdx = null;
+    document.getElementById('detPanel').innerHTML = `<div class="no-sel">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+      <span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span>
+    </div>`;
+  }
+
+  selectedRows.clear();
+  dragMailIdxs = [];
+  applyFilter();
+  renderLNB();
+  toast(`${moved}개 메일 → ${label}`);
+}
+
+function clearFolderHighlight(){
+  if(dragOverFid){
+    const el = document.querySelector(`.lnb-item[data-fid="${dragOverFid}"],.lnb-subfolder[data-fid="${dragOverFid}"]`);
+    if(el) el.classList.remove('drop-over');
+    dragOverFid = null;
+  }
+}
+
+/* ── INIT ── */
+renderLNB();
+buildMoveMenu();
+applyFilter();
+</script>
+</body>
+</html>
