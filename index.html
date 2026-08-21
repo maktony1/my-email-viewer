@@ -66,8 +66,7 @@ body{font-family:'Noto Sans KR',sans-serif;font-size:13px;color:var(--text);back
 
 .lnb-cap{padding:8px 14px 12px;border-top:1px solid var(--border);}
 .lnb-cap-row{font-size:11px;color:var(--muted);margin-bottom:5px;display:flex;justify-content:space-between;}
-.cap-bg{background:var(--border);border-radius:4px;height:5px;overflow:hidden;}
-.cap-fill{height:100%;background:var(--kg-grad);border-radius:4px;transition:width .5s;}
+.lnb-cap-num{font-weight:600;color:var(--dim);}
 
 /* ── MAIN ── */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
@@ -295,9 +294,9 @@ mark{background:#fff59d;color:var(--text);border-radius:2px;padding:0 1px;}
       <!-- 동적 렌더링 -->
     </div>
     <div class="lnb-cap">
-      <div class="lnb-cap-row"><span>아카이브 용량</span><span id="capTxt">0 KB</span></div>
-      <div class="cap-bg"><div class="cap-fill" id="capBar" style="width:0%"></div></div>
-      <div class="lnb-cap-row" style="margin-top:6px;justify-content:flex-start;gap:4px;">
+      <div class="lnb-cap-row"><span>메일 원본 크기</span><span class="lnb-cap-num" id="capTxt">0 KB</span></div>
+      <div class="lnb-cap-row"><span>브라우저 저장소 사용량</span><span class="lnb-cap-num" id="capUsage">확인 중…</span></div>
+      <div class="lnb-cap-row" style="margin-top:2px;justify-content:flex-start;gap:4px;">
         <span style="color:#8ba989;">●</span><span>브라우저에 자동 저장됨</span>
       </div>
       <div class="lnb-add-folder" style="margin-top:2px;color:#e53935;" onclick="clearArchive()">
@@ -957,8 +956,29 @@ function updateSidebar(){
   const un=mails.filter(m=>m.unread&&m.folderId!=='trash').length;
   const tb=mails.reduce((s,m)=>s+m.size,0);
   document.getElementById('capTxt').textContent=fmtSz(tb);
-  document.getElementById('capBar').style.width=Math.min(tb/(50*1024*1024)*100,100)+'%';
   document.getElementById('statTxt').textContent=`${mails.length}건 | 안읽음 ${un}건`;
+  refreshStorageUsage();
+}
+
+// 실제 브라우저 저장소 사용량을 조회 (한도 표시 없이, 지금 얼마나 쓰고 있는지만 보여줌)
+let _usageTimer=null;
+function refreshStorageUsage(){
+  clearTimeout(_usageTimer);
+  _usageTimer=setTimeout(async()=>{
+    const el=document.getElementById('capUsage');
+    if(!el) return;
+    try{
+      if(navigator.storage && navigator.storage.estimate){
+        const est=await navigator.storage.estimate();
+        el.textContent=fmtSz(est.usage||0);
+        el.title=`전체 브라우저 저장소 한도: ${fmtSz(est.quota||0)} (참고용, 실제로는 디스크 여유공간에 따라 자동 조절됩니다)`;
+      } else {
+        el.textContent='이 브라우저에서 확인 불가';
+      }
+    }catch{
+      el.textContent='확인 불가';
+    }
+  },200);
 }
 
 /* ── EML 파서 ── */
