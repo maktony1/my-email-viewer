@@ -297,6 +297,12 @@ mark{background:#fff59d;color:var(--text);border-radius:2px;padding:0 1px;}
     <div class="lnb-cap">
       <div class="lnb-cap-row"><span>아카이브 용량</span><span id="capTxt">0 KB</span></div>
       <div class="cap-bg"><div class="cap-fill" id="capBar" style="width:0%"></div></div>
+      <div class="lnb-cap-row" style="margin-top:6px;justify-content:flex-start;gap:4px;">
+        <span style="color:#8ba989;">●</span><span>브라우저에 자동 저장됨</span>
+      </div>
+      <div class="lnb-add-folder" style="margin-top:2px;color:#e53935;" onclick="clearArchive()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 저장된 아카이브 초기화
+      </div>
     </div>
   </div>
 
@@ -369,6 +375,87 @@ let curFolderId = 'inbox';
 let modalMode = null; // 'add-root','add-sub','rename'
 let modalTargetId = null;
 let selectedRows = new Set();
+
+/* ── 로컬 저장 (IndexedDB) — 껐다 켜도 데이터 유지 ── */
+const DB_NAME='kgMailArchiveDB', DB_VER=1, STORE_MAILS='mails', STORE_META='meta';
+let _dbInst=null, _saveTimer=null;
+function openDB(){
+  if(_dbInst) return Promise.resolve(_dbInst);
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,DB_VER);
+    req.onupgradeneeded=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains(STORE_MAILS)) d.createObjectStore(STORE_MAILS,{keyPath:'id'});
+      if(!d.objectStoreNames.contains(STORE_META)) d.createObjectStore(STORE_META,{keyPath:'key'});
+    };
+    req.onsuccess=e=>{_dbInst=e.target.result;resolve(_dbInst);};
+    req.onerror=e=>reject(e.target.error);
+  });
+}
+async function persistMails(){
+  try{
+    const db=await openDB();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(STORE_MAILS,'readwrite');
+      const store=tx.objectStore(STORE_MAILS);
+      store.clear();
+      for(const m of mails) store.put(m);
+      tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error);
+    });
+  }catch(e){console.warn('메일 저장 실패',e);}
+}
+async function persistMeta(){
+  try{
+    const db=await openDB();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(STORE_META,'readwrite');
+      const store=tx.objectStore(STORE_META);
+      store.put({key:'folders',value:folders});
+      store.put({key:'curFolderId',value:curFolderId});
+      tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error);
+    });
+  }catch(e){console.warn('메타 저장 실패',e);}
+}
+function persistAll(){persistMails();persistMeta();}
+// 메일 목록 변경은 살짝 디바운스해서 저장(연속 클릭 시 과도한 쓰기 방지)
+function persistMailsDebounced(){
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(persistMails,150);
+}
+async function restoreFromDB(){
+  try{
+    const db=await openDB();
+    return await new Promise((resolve)=>{
+      const tx=db.transaction([STORE_MAILS,STORE_META],'readonly');
+      const mailsReq=tx.objectStore(STORE_MAILS).getAll();
+      const foldersReq=tx.objectStore(STORE_META).get('folders');
+      const curFolderReq=tx.objectStore(STORE_META).get('curFolderId');
+      tx.oncomplete=()=>{
+        const loadedMails=mailsReq.result||[];
+        loadedMails.forEach(m=>{ if(m.date && !(m.date instanceof Date)) m.date=new Date(m.date); });
+        resolve({
+          mails:loadedMails,
+          folders:foldersReq.result?foldersReq.result.value:null,
+          curFolderId:curFolderReq.result?curFolderReq.result.value:null
+        });
+      };
+      tx.onerror=()=>resolve({mails:[],folders:null,curFolderId:null});
+    });
+  }catch(e){console.warn('복원 실패',e);return{mails:[],folders:null,curFolderId:null};}
+}
+async function clearArchive(){
+  if(!confirm('저장된 모든 메일과 폴더를 삭제할까요? 이 작업은 되돌릴 수 없습니다.')) return;
+  try{
+    const db=await openDB();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction([STORE_MAILS,STORE_META],'readwrite');
+      tx.objectStore(STORE_MAILS).clear();
+      tx.objectStore(STORE_META).clear();
+      tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error);
+    });
+  }catch(e){console.warn(e);}
+  location.reload();
+}
 
 /* ── UTILS ── */
 const esc=s=>s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):'';
@@ -525,6 +612,7 @@ function confirmModal(){
   closeModal();
   renderLNB();
   buildMoveMenu();
+  persistMeta();
 }
 function deleteFolder(fid){
   // 해당 폴더의 메일을 inbox로 이동
@@ -540,6 +628,7 @@ function deleteFolder(fid){
   removeFrom(folders,fid);
   if(curFolderId===fid) setFolder('inbox');
   else {renderLNB();buildMoveMenu();}
+  persistAll();
   toast('폴더 삭제됨');
 }
 
@@ -574,6 +663,7 @@ function moveMail(idx, targetFolderId){
   applyFilter();
   if(activeIdx===i){activeIdx=null;document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;}
   renderLNB();
+  persistMailsDebounced();
 }
 
 /* ── 폴더 이동 ── */
@@ -585,6 +675,7 @@ function setFolder(fid){
   document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;
   renderLNB();
   applyFilter();
+  persistMeta();
 }
 
 /* ── FILTER & SORT ── */
@@ -694,6 +785,7 @@ function markSelectedRead(){
   (selectedRows.size>0?[...selectedRows]:[activeIdx]).filter(i=>i!=null).forEach(i=>{if(filtered[i])filtered[i].unread=false;});
   selectedRows.clear();
   renderList();updateSidebar();renderLNB();
+  persistMailsDebounced();
 }
 function deleteSelected(){
   const idxs=selectedRows.size>0?[...selectedRows]:[activeIdx].filter(i=>i!=null);
@@ -701,6 +793,7 @@ function deleteSelected(){
   selectedRows.clear();
   if(idxs.includes(activeIdx)){activeIdx=null;document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;}
   applyFilter();renderLNB();toast(`${idxs.length}개 메일 삭제됨`);
+  persistMailsDebounced();
 }
 
 /* ── 컨텍스트 메뉴 ── */
@@ -726,6 +819,7 @@ function ctxAction(type){
   else if(type==='markUnread'){m.unread=true;}
   else if(type==='delete'){m.folderId='trash';if(activeIdx===ctxMailIdx){activeIdx=null;document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;}}
   hideCtxMenu();applyFilter();renderLNB();
+  persistMailsDebounced();
 }
 
 /* ── SELECT & DETAIL ── */
@@ -738,6 +832,7 @@ function selectMail(idx,e){
   renderList();
   renderDetail(m,idx);
   updateSidebar();renderLNB();
+  persistMailsDebounced();
 }
 
 function renderDetail(m,mIdx){
@@ -841,6 +936,7 @@ function deleteMailDirect(idx){
   activeIdx=null;
   document.getElementById('detPanel').innerHTML=`<div class="no-sel"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span style="font-size:13px;color:#bbb">메일을 선택하면 내용이 표시됩니다</span></div>`;
   applyFilter();renderLNB();toast('메일이 삭제함으로 이동됐습니다');
+  persistMailsDebounced();
 }
 
 function resizeIframe(f){try{const h=f.contentDocument?.body?.scrollHeight;if(h)f.style.height=Math.min(h+40,3000)+'px';}catch{}}
@@ -1006,6 +1102,7 @@ async function loadFiles(files){
   setTimeout(()=>{bar.style.opacity='0';bar.style.width='0';},500);
   applyFilter();renderLNB();
   toast(`${n}개 메일 로드 완료 (총 ${mails.length}건)`);
+  persistMails();
 }
 function readText(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(file,'utf-8');});}
 
@@ -1108,6 +1205,7 @@ function onFolderDrop(e, fid){
   applyFilter();
   renderLNB();
   toast(`${moved}개 메일 → ${label}`);
+  persistMailsDebounced();
 }
 
 function clearFolderHighlight(){
@@ -1118,10 +1216,22 @@ function clearFolderHighlight(){
   }
 }
 
-/* ── INIT ── */
-renderLNB();
-buildMoveMenu();
-applyFilter();
+/* ── INIT (저장된 데이터 복원 후 렌더링) ── */
+(async function init(){
+  const restored=await restoreFromDB();
+  if(restored.mails && restored.mails.length) mails=restored.mails;
+  if(restored.folders) folders=restored.folders;
+  if(restored.curFolderId && findFolder(restored.curFolderId)) curFolderId=restored.curFolderId;
+
+  const f=findFolder(curFolderId)||{label:curFolderId};
+  document.getElementById('tbTitle').textContent=f.label;
+
+  renderLNB();
+  buildMoveMenu();
+  applyFilter();
+
+  if(mails.length) toast(`이전 세션 복원됨 — 메일 ${mails.length}건 불러옴`);
+})();
 </script>
 </body>
 </html>
